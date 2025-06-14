@@ -1,16 +1,17 @@
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Transcriptor Continuo</title>
+    <title>Transcriptor Avanzado</title>
 
     <style>
         /* --- ESTILOS CSS --- */
         :root {
-            --color-primario: #28a745; /* Verde para 'Iniciar' */
-            --color-primario-hover: #218838;
+            --color-primario: #007bff;
+            --color-primario-hover: #0056b3;
+            --color-exito: #28a745;
+            --color-exito-hover: #218838;
             --color-peligro: #dc3545;
             --color-peligro-hover: #c82333;
             --color-fondo: #f4f4f4;
@@ -86,43 +87,45 @@
             transform: none;
         }
 
-        #iniciarBtn {
-            background-color: var(--color-primario);
-        }
-        #iniciarBtn:hover:not(:disabled) {
-            background-color: var(--color-primario-hover);
-        }
+        #iniciarBtn { background-color: var(--color-primario); }
+        #iniciarBtn:hover:not(:disabled) { background-color: var(--color-primario-hover); }
 
-        #detenerBtn {
-            background-color: var(--color-peligro);
-        }
-        #detenerBtn:hover:not(:disabled) {
-            background-color: var(--color-peligro-hover);
+        #detenerBtn { background-color: var(--color-peligro); }
+        #detenerBtn:hover:not(:disabled) { background-color: var(--color-peligro-hover); }
+        
+        #copiarBtn { background-color: #6c757d; }
+        #copiarBtn:hover:not(:disabled) { background-color: #5a6268; }
+        
+        #copiarBtn.copiado {
+            background-color: var(--color-exito);
         }
 
         .area-notas {
             width: 100%;
-            min-height: 50vh; /* Mayor altura para transcripciones largas */
+            height: 55vh; /* Altura fija para el contenedor */
             border: 1px solid #ddd;
             border-radius: var(--radio-borde);
             padding: 15px;
             text-align: left;
             font-size: 17px;
-            line-height: 1.7; /* Más espaciado para legibilidad */
-            overflow-y: auto;
+            line-height: 1.7;
+            overflow-y: auto; /* Scroll vertical cuando el contenido excede la altura */
             box-sizing: border-box;
             background-color: #fafafa;
-            white-space: pre-wrap; /* Mantiene los saltos de línea y espacios */
-        }
-        
-        .area-notas:focus {
-            outline: 2px solid var(--color-primario);
-            border-color: transparent;
+            white-space: pre-wrap;
         }
 
         .placeholder {
             color: #999;
             font-style: italic;
+        }
+        
+        .timestamp {
+            font-weight: bold;
+            color: #555;
+            margin-top: 15px;
+            margin-bottom: 5px;
+            font-size: 14px;
         }
 
     </style>
@@ -130,15 +133,16 @@
 <body>
 
     <div class="container">
-        <h1>🎙️ Transcriptor Continuo</h1>
-        <p class="descripcion">Presiona "Iniciar Dictado". El micrófono se mantendrá activo y transcribirá sin parar.</p>
+        <h1>🎙️ Transcriptor Avanzado</h1>
+        <p class="descripcion">Presiona "Iniciar". Se añadirá la hora automáticamente tras pausas de más de 1 minuto.</p>
         
         <div class="controles">
             <button id="iniciarBtn">Iniciar Dictado</button>
             <button id="detenerBtn" disabled>Detener Dictado</button>
+            <button id="copiarBtn">Copiar Texto 📋</button>
         </div>
         
-        <div id="area-notas" class="area-notas" contenteditable="true">
+        <div id="area-notas" contenteditable="true">
             <span class="placeholder">El texto aparecerá aquí...</span>
         </div>
     </div>
@@ -149,22 +153,35 @@
         window.SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
         if (!window.SpeechRecognition) {
-            alert("Lo siento, tu navegador no soporta la API de Reconocimiento de Voz. Por favor, intenta con Google Chrome o Microsoft Edge.");
+            alert("Lo siento, tu navegador no soporta esta funcionalidad. Por favor, intenta con Google Chrome o Microsoft Edge.");
         } else {
-            // --- INICIALIZACIÓN Y VARIABLES ---
+            // --- ELEMENTOS DEL DOM Y VARIABLES ---
             const reconocimiento = new SpeechRecognition();
             const iniciarBtn = document.getElementById('iniciarBtn');
             const detenerBtn = document.getElementById('detenerBtn');
+            const copiarBtn = document.getElementById('copiarBtn');
             const areaNotas = document.getElementById('area-notas');
             const placeholder = document.querySelector('.placeholder');
 
-            // Bandera para controlar el estado del dictado y permitir el reinicio automático.
             let dictadoActivo = false;
+            let ultimoTimestamp = null;
+            const UMBRAL_PAUSA = 60 * 1000; // 1 minuto en milisegundos
 
             // --- CONFIGURACIÓN DEL RECONOCIMIENTO ---
             reconocimiento.lang = 'es-ES';
-            reconocimiento.continuous = true;  // Esencial, aunque no previene el timeout
-            reconocimiento.interimResults = false; // Solo nos interesan los resultados finales
+            reconocimiento.continuous = true;
+            reconocimiento.interimResults = false;
+
+            // --- FUNCIONES AUXILIARES ---
+            function formatarHora(fecha) {
+                let horas = fecha.getHours();
+                let minutos = fecha.getMinutes();
+                const ampm = horas >= 12 ? 'PM' : 'AM';
+                horas = horas % 12;
+                horas = horas ? horas : 12; // La hora '0' debe ser '12'
+                minutos = minutos < 10 ? '0' + minutos : minutos;
+                return `[${horas}:${minutos} ${ampm}]`;
+            }
 
             // --- MANEJADORES DE EVENTOS DE BOTONES ---
 
@@ -178,6 +195,20 @@
                 reconocimiento.stop();
             });
 
+            copiarBtn.addEventListener('click', () => {
+                const textoACopiar = areaNotas.innerText; // innerText preserva mejor los saltos de línea
+                navigator.clipboard.writeText(textoACopiar).then(() => {
+                    copiarBtn.textContent = '¡Copiado!';
+                    copiarBtn.classList.add('copiado');
+                    setTimeout(() => {
+                        copiarBtn.textContent = 'Copiar Texto 📋';
+                        copiarBtn.classList.remove('copiado');
+                    }, 2000);
+                }).catch(err => {
+                    console.error('Error al copiar texto: ', err);
+                });
+            });
+
             // --- MANEJADORES DE EVENTOS DE RECONOCIMIENTO ---
 
             reconocimiento.onstart = function() {
@@ -188,37 +219,52 @@
                 }
             };
 
-            // La magia para evitar que se detenga: Si el dictado debe estar activo, reinícialo.
             reconocimiento.onend = function() {
                 if (dictadoActivo) {
-                    // Si el dictado debe continuar, pero el servicio se detuvo, lo reiniciamos.
                     reconocimiento.start();
                 } else {
-                    // Si se detuvo por el usuario, actualizamos los botones.
                     iniciarBtn.disabled = false;
                     detenerBtn.disabled = true;
                 }
             };
 
             reconocimiento.onerror = function(event) {
-                console.error("Error en el reconocimiento de voz: ", event.error);
-                // El error 'no-speech' es común si hay silencio, lo ignoramos para que 'onend' lo reinicie.
-                if (event.error !== 'no-speech') {
+                console.error("Error de reconocimiento: ", event.error);
+                if (event.error !== 'no-speech' && event.error !== 'aborted') {
                     alert(`Error: ${event.error}`);
                 }
             };
 
             reconocimiento.onresult = function(event) {
-                // Iteramos sobre los resultados obtenidos desde la última vez
+                const ahora = new Date();
+                
+                // Comprobar si se debe añadir una marca de tiempo
+                if (!ultimoTimestamp || (ahora - ultimoTimestamp > UMBRAL_PAUSA)) {
+                    const timestampEl = document.createElement('div');
+                    timestampEl.className = 'timestamp';
+                    timestampEl.textContent = formatarHora(ahora);
+                    areaNotas.appendChild(timestampEl);
+                }
+                
+                // Procesar la transcripción
+                let transcripcionCompleta = '';
                 for (let i = event.resultIndex; i < event.results.length; ++i) {
                     if (event.results[i].isFinal) {
-                        const transcripcion = event.results[i][0].transcript;
-                        // Añadimos la nueva transcripción al contenido existente
-                        areaNotas.textContent += transcripcion.trim() + ' ';
+                        transcripcionCompleta += event.results[i][0].transcript.trim() + '. ';
                     }
                 }
                 
-                // Auto-scroll hacia el final para ver siempre el último texto
+                // Añadir el texto transcrito
+                if (transcripcionCompleta) {
+                    const textoEl = document.createElement('span');
+                    textoEl.textContent = transcripcionCompleta;
+                    areaNotas.appendChild(textoEl);
+                }
+
+                // Actualizar la hora de la última actividad
+                ultimoTimestamp = ahora;
+                
+                // Auto-scroll hacia el final
                 areaNotas.scrollTop = areaNotas.scrollHeight;
             };
         }
@@ -226,4 +272,3 @@
 
 </body>
 </html>
-
