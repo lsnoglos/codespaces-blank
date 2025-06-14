@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Transcriptor Avanzado</title>
+    <title>Transcriptor IA Avanzado</title>
 
     <style>
         /* --- ESTILOS CSS --- */
@@ -11,13 +11,14 @@
             --color-primario: #007bff;
             --color-primario-hover: #0056b3;
             --color-exito: #28a745;
-            --color-exito-hover: #218838;
             --color-peligro: #dc3545;
             --color-peligro-hover: #c82333;
-            --color-fondo: #f4f4f4;
+            --color-info: #17a2b8;
+            --color-info-hover: #138496;
+            --color-fondo: #f4f7f9;
             --color-superficie: #ffffff;
             --color-texto: #212529;
-            --sombra: 0 4px 12px rgba(0, 0, 0, 0.1);
+            --sombra: 0 4px 15px rgba(0, 0, 0, 0.08);
             --radio-borde: 12px;
         }
 
@@ -42,8 +43,6 @@
             width: 100%;
             max-width: 800px;
             text-align: center;
-            display: flex;
-            flex-direction: column;
         }
 
         h1 {
@@ -52,39 +51,36 @@
             margin-bottom: 10px;
         }
 
-        p.descripcion {
-            margin-bottom: 20px;
-            color: #555;
-        }
-
-        .controles {
+        .controles, .controles-ia {
             display: flex;
             justify-content: center;
             align-items: center;
             flex-wrap: wrap;
-            gap: 15px;
+            gap: 10px;
             margin-bottom: 20px;
         }
 
         button {
             color: white;
             border: none;
-            padding: 12px 24px;
+            padding: 12px 20px;
             font-size: 16px;
             font-weight: 500;
             border-radius: 8px;
             cursor: pointer;
-            transition: background-color 0.3s, transform 0.2s;
+            transition: all 0.3s ease;
         }
 
         button:hover:not(:disabled) {
             transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
         }
 
         button:disabled {
-            background-color: #b0b0b0;
+            background-color: #b0b0b0 !important;
             cursor: not-allowed;
             transform: none;
+            box-shadow: none;
         }
 
         #iniciarBtn { background-color: var(--color-primario); }
@@ -96,50 +92,51 @@
         #copiarBtn { background-color: #6c757d; }
         #copiarBtn:hover:not(:disabled) { background-color: #5a6268; }
         
-        #copiarBtn.copiado {
-            background-color: var(--color-exito);
+        #resumirBtn { background-color: var(--color-info); }
+        #resumirBtn:hover:not(:disabled) { background-color: var(--color-info-hover); }
+
+        #copiarBtn.copiado { background-color: var(--color-exito); }
+        
+        .api-key-input {
+            border: 1px solid #ccc;
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 14px;
+            flex-grow: 1;
         }
 
         .area-notas {
             width: 100%;
-            height: 55vh; /* Altura fija para el contenedor */
+            height: 45vh;
             border: 1px solid #ddd;
             border-radius: var(--radio-borde);
             padding: 15px;
             text-align: left;
             font-size: 17px;
             line-height: 1.7;
-            overflow-y: auto; /* Scroll vertical cuando el contenido excede la altura */
+            overflow-y: auto;
             box-sizing: border-box;
             background-color: #fafafa;
-            white-space: pre-wrap;
         }
 
-        .placeholder {
-            color: #999;
-            font-style: italic;
-        }
-        
-        .timestamp {
-            font-weight: bold;
-            color: #555;
-            margin-top: 15px;
-            margin-bottom: 5px;
-            font-size: 14px;
-        }
-
+        .placeholder { color: #999; font-style: italic; }
+        .timestamp { font-weight: bold; color: var(--color-primario); margin-top: 15px; margin-bottom: 5px; font-size: 14px; display: block; }
     </style>
 </head>
 <body>
 
     <div class="container">
-        <h1>🎙️ Transcriptor Avanzado</h1>
-        <p class="descripcion">Presiona "Iniciar". Se añadirá la hora automáticamente tras pausas de más de 1 minuto.</p>
+        <h1>🎙️ Transcriptor IA Avanzado</h1>
         
         <div class="controles">
-            <button id="iniciarBtn">Iniciar Dictado</button>
-            <button id="detenerBtn" disabled>Detener Dictado</button>
-            <button id="copiarBtn">Copiar Texto 📋</button>
+            <button id="iniciarBtn">Iniciar</button>
+            <button id="detenerBtn" disabled>Detener</button>
+            <button id="copiarBtn">Copiar 📋</button>
+        </div>
+
+        <div class="controles-ia">
+            <input type="password" id="apiKeyInput" class="api-key-input" placeholder="Pega tu Clave de API de Gemini aquí">
+            <button id="resumirBtn">Resumir con IA ✨</button>
         </div>
         
         <div id="area-notas" contenteditable="true">
@@ -148,24 +145,24 @@
     </div>
 
     <script>
-        // --- CÓDIGO JAVASCRIPT ---
-        
         window.SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
         if (!window.SpeechRecognition) {
-            alert("Lo siento, tu navegador no soporta esta funcionalidad. Por favor, intenta con Google Chrome o Microsoft Edge.");
+            alert("Lo siento, tu navegador no soporta esta funcionalidad.");
         } else {
             // --- ELEMENTOS DEL DOM Y VARIABLES ---
             const reconocimiento = new SpeechRecognition();
             const iniciarBtn = document.getElementById('iniciarBtn');
             const detenerBtn = document.getElementById('detenerBtn');
             const copiarBtn = document.getElementById('copiarBtn');
+            const resumirBtn = document.getElementById('resumirBtn');
+            const apiKeyInput = document.getElementById('apiKeyInput');
             const areaNotas = document.getElementById('area-notas');
             const placeholder = document.querySelector('.placeholder');
 
             let dictadoActivo = false;
             let ultimoTimestamp = null;
-            const UMBRAL_PAUSA = 60 * 1000; // 1 minuto en milisegundos
+            let wakeLock = null; // Para la API Wake Lock
 
             // --- CONFIGURACIÓN DEL RECONOCIMIENTO ---
             reconocimiento.lang = 'es-ES';
@@ -173,53 +170,115 @@
             reconocimiento.interimResults = false;
 
             // --- FUNCIONES AUXILIARES ---
-            function formatarHora(fecha) {
+            const formatarHora = (fecha) => {
                 let horas = fecha.getHours();
                 let minutos = fecha.getMinutes();
                 const ampm = horas >= 12 ? 'PM' : 'AM';
                 horas = horas % 12;
-                horas = horas ? horas : 12; // La hora '0' debe ser '12'
+                horas = horas ? horas : 12;
                 minutos = minutos < 10 ? '0' + minutos : minutos;
                 return `[${horas}:${minutos} ${ampm}]`;
-            }
+            };
+
+            // --- API WAKE LOCK (MANTENER PANTALLA ENCENDIDA) ---
+            const solicitarWakeLock = async () => {
+                if ('wakeLock' in navigator) {
+                    try {
+                        wakeLock = await navigator.wakeLock.request('screen');
+                        console.log('Wake Lock activado.');
+                    } catch (err) {
+                        console.error(`${err.name}, ${err.message}`);
+                    }
+                }
+            };
+
+            const liberarWakeLock = async () => {
+                if (wakeLock !== null) {
+                    await wakeLock.release();
+                    wakeLock = null;
+                    console.log('Wake Lock liberado.');
+                }
+            };
 
             // --- MANEJADORES DE EVENTOS DE BOTONES ---
-
             iniciarBtn.addEventListener('click', () => {
                 dictadoActivo = true;
                 reconocimiento.start();
+                solicitarWakeLock();
             });
 
             detenerBtn.addEventListener('click', () => {
                 dictadoActivo = false;
                 reconocimiento.stop();
+                liberarWakeLock();
             });
 
             copiarBtn.addEventListener('click', () => {
-                const textoACopiar = areaNotas.innerText; // innerText preserva mejor los saltos de línea
-                navigator.clipboard.writeText(textoACopiar).then(() => {
+                navigator.clipboard.writeText(areaNotas.innerText).then(() => {
                     copiarBtn.textContent = '¡Copiado!';
                     copiarBtn.classList.add('copiado');
                     setTimeout(() => {
-                        copiarBtn.textContent = 'Copiar Texto 📋';
+                        copiarBtn.textContent = 'Copiar 📋';
                         copiarBtn.classList.remove('copiado');
                     }, 2000);
-                }).catch(err => {
-                    console.error('Error al copiar texto: ', err);
                 });
+            });
+            
+            // --- LÓGICA DE RESUMEN CON IA (GEMINI) ---
+            resumirBtn.addEventListener('click', async () => {
+                const apiKey = apiKeyInput.value.trim();
+                const texto = areaNotas.innerText;
+
+                if (!apiKey) {
+                    alert('Por favor, introduce tu clave de API de Gemini para poder resumir.');
+                    return;
+                }
+                if (texto.length < 50) {
+                    alert('Necesitas más texto para poder generar un resumen significativo.');
+                    return;
+                }
+
+                resumirBtn.disabled = true;
+                resumirBtn.textContent = 'Resumiendo...';
+
+                try {
+                    const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`;
+                    
+                    const response = await fetch(API_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            contents: [{
+                                parts: [{ text: `Resume el siguiente texto en español, extrayendo las ideas y puntos clave en un formato claro y conciso:\n\n---\n${texto}\n---` }]
+                            }]
+                        })
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`Error de la API: ${response.statusText}`);
+                    }
+
+                    const data = await response.json();
+                    const resumen = data.candidates[0].content.parts[0].text;
+                    alert(`Resumen Generado:\n\n${resumen}`);
+
+                } catch (error) {
+                    console.error('Error al resumir con la IA:', error);
+                    alert('Hubo un error al contactar con la IA. Revisa tu clave de API y la consola para más detalles.');
+                } finally {
+                    resumirBtn.disabled = false;
+                    resumirBtn.textContent = 'Resumir con IA ✨';
+                }
             });
 
             // --- MANEJADORES DE EVENTOS DE RECONOCIMIENTO ---
-
-            reconocimiento.onstart = function() {
+            reconocimiento.onstart = () => {
                 iniciarBtn.disabled = true;
                 detenerBtn.disabled = false;
-                if (placeholder) {
-                    placeholder.style.display = 'none';
-                }
+                if (placeholder) placeholder.style.display = 'none';
             };
 
-            reconocimiento.onend = function() {
+            reconocimiento.onend = () => {
                 if (dictadoActivo) {
                     reconocimiento.start();
                 } else {
@@ -228,43 +287,39 @@
                 }
             };
 
-            reconocimiento.onerror = function(event) {
+            reconocimiento.onerror = (event) => {
                 console.error("Error de reconocimiento: ", event.error);
                 if (event.error !== 'no-speech' && event.error !== 'aborted') {
                     alert(`Error: ${event.error}`);
                 }
             };
 
-            reconocimiento.onresult = function(event) {
+            reconocimiento.onresult = (event) => {
                 const ahora = new Date();
                 
-                // Comprobar si se debe añadir una marca de tiempo
-                if (!ultimoTimestamp || (ahora - ultimoTimestamp > UMBRAL_PAUSA)) {
-                    const timestampEl = document.createElement('div');
+                // Lógica de timestamp corregida: se activa si el minuto cambia.
+                if (!ultimoTimestamp || ahora.getMinutes() !== ultimoTimestamp.getMinutes()) {
+                    const timestampEl = document.createElement('span');
                     timestampEl.className = 'timestamp';
                     timestampEl.textContent = formatarHora(ahora);
                     areaNotas.appendChild(timestampEl);
                 }
                 
-                // Procesar la transcripción
                 let transcripcionCompleta = '';
                 for (let i = event.resultIndex; i < event.results.length; ++i) {
                     if (event.results[i].isFinal) {
-                        transcripcionCompleta += event.results[i][0].transcript.trim() + '. ';
+                        transcripcionCompleta += event.results[i][0].transcript.trim() + ' ';
                     }
                 }
                 
-                // Añadir el texto transcrito
                 if (transcripcionCompleta) {
                     const textoEl = document.createElement('span');
-                    textoEl.textContent = transcripcionCompleta;
+                    // Agrega un espacio inicial para separarlo del timestamp
+                    textoEl.textContent = ' ' + transcripcionCompleta.charAt(0).toUpperCase() + transcripcionCompleta.slice(1);
                     areaNotas.appendChild(textoEl);
                 }
-
-                // Actualizar la hora de la última actividad
-                ultimoTimestamp = ahora;
                 
-                // Auto-scroll hacia el final
+                ultimoTimestamp = ahora;
                 areaNotas.scrollTop = areaNotas.scrollHeight;
             };
         }
